@@ -4,9 +4,10 @@ pragma solidity 0.8.35;
 
 import "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
+import "../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
 
-contract NTFMarketplace is Ownable{
+contract NFTMarketplace is Ownable, ReentrancyGuard{
 
 
 	struct Listing {
@@ -20,6 +21,7 @@ contract NTFMarketplace is Ownable{
 
 	event NFTListed(address indexed seller, address indexed nftAddress, uint256 indexed tokenId, uint256 price);
 	event NFTCancelled(address indexed seller, address indexed nftAddress, uint256 indexed tokenId);
+	event NFTSold(address indexed buyer, address indexed seller, address indexed nftAddress, uint256 tokenId, uint256 price);
 
 
 	constructor() Ownable(msg.sender) {
@@ -29,7 +31,7 @@ contract NTFMarketplace is Ownable{
 
 
 	// Listar NFTs
-	function listNFT(address nftAddress_, uint256 tokenId_, uint256 price_) external { 
+	function listNFT(address nftAddress_, uint256 tokenId_, uint256 price_) external nonReentrant { 
 
 		require(price_ > 0, "Price can not be 0");
 
@@ -53,6 +55,20 @@ contract NTFMarketplace is Ownable{
 
 
 	//Buy NFTs
+	function buyNFT(address nftAddress_, uint256 tokenId_) external payable nonReentrant {
+		Listing memory listing_ = listing[nftAddress_][tokenId_];
+		require(listing_.price > 0, "Listing not exists");
+		require(msg.value == listing_.price, "Incorrect Price");
+
+		delete listing[nftAddress_][tokenId_];
+		IERC721(nftAddress_).transferFrom(listing_.seller, msg.sender, listing_.tokenId);
+
+		(bool success, ) = listing_.seller.call{value: msg.value}("");
+		require(success, "Transfer failed");
+
+		emit NFTSold(msg.sender, listing_.seller, listing_.nftAddress, listing_.tokenId, listing_.price);
+		
+	}
 
 
 	//Cancel List 
