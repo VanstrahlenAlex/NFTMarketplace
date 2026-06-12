@@ -55,7 +55,7 @@ contract NFTMarketplaceTest is Test {
 
 		address user2_ = vm.addr(3);
 		uint256 tokenId_ = 1;
-		nft.mint(user2, tokenId_);
+		nft.mint(user2_, tokenId_);
 		vm.expectRevert("You are not the owner of this NFT");
 		marketplace.listNFT(address(nft), tokenId_, 1);
 
@@ -66,9 +66,114 @@ contract NFTMarketplaceTest is Test {
 	function testListNFTCorrectly() public {
 		vm.startPrank(user);
 
-		marketplace.listing(address(nft), tokenId);
-		marketplace.listNFT(address(nft), tokenId, 0);
+		(address sellerBefore,,,) = marketplace.listing(address(nft), tokenId);
+		marketplace.listNFT(address(nft), tokenId, 1);
+		(address sellerAfter,,,) = marketplace.listing(address(nft), tokenId);
+
+		assert(sellerBefore == address(0) && sellerAfter == user);
+
 
 		vm.stopPrank();
 	}
+
+	//Test CancelNFT
+	function testListShouldRevertIfNtOwner() public { 
+		vm.startPrank(user);
+
+		(address sellerBefore,,,) = marketplace.listing(address(nft), tokenId);
+		marketplace.listNFT(address(nft), tokenId, 1e18);
+		(address sellerAfter,,,) = marketplace.listing(address(nft), tokenId);
+
+		assert(sellerBefore == address(0) && sellerAfter == user);
+
+
+		vm.stopPrank();
+		address user2 = vm.addr(3);
+		vm.startPrank(user2);
+
+		vm.expectRevert("You are not the listing owner");
+		marketplace.cancelList(address(nft), tokenId);
+		vm.stopPrank();
+		
+	}
+
+	function testCancelListShouldWorkCorrectly() public { 
+		vm.startPrank(user);
+
+		(address sellerBefore,,,) = marketplace.listing(address(nft), tokenId);
+		marketplace.listNFT(address(nft), tokenId, 1e18);
+		(address sellerAfter,,,) = marketplace.listing(address(nft), tokenId);
+
+		assert(sellerBefore == address(0) && sellerAfter == user);
+
+		marketplace.cancelList(address(nft), tokenId);
+		(address sellerAfter2,,,) = marketplace.listing(address(nft), tokenId);
+		assert(sellerAfter2 == address(0));
+
+		vm.stopPrank();
+	}
+
+	function testCanNotBuyUnLitedNFT() public { 
+		address user2 = vm.addr(3);
+		vm.startPrank(user2);
+
+		vm.expectRevert("Listing not exists");
+		marketplace.buyNFT(address(nft), tokenId); 
+
+		vm.stopPrank();
+
+	}
+
+	function testCanNotBuyWithIncorrectPay() public { 
+		vm.startPrank(user);
+
+		uint256 price = 1e18;
+
+		(address sellerBefore,,,) = marketplace.listing(address(nft), tokenId);
+		marketplace.listNFT(address(nft), tokenId, price);
+		(address sellerAfter,,,) = marketplace.listing(address(nft), tokenId);
+
+		assert(sellerBefore == address(0) && sellerAfter == user);
+
+		vm.stopPrank();
+
+		address user2 = vm.addr(3);
+		vm.startPrank(user2);
+		vm.deal(user2, price);
+
+		vm.expectRevert("Incorrect price");
+		marketplace.buyNFT{value: price - 1}(address(nft), tokenId);
+
+		vm.stopPrank();
+	}
+
+	function testShouldBuyNFTCorrectly() public { 
+		vm.startPrank(user);
+
+		uint256 price = 1e18;
+
+		(address sellerBefore,,,) = marketplace.listing(address(nft), tokenId);
+		marketplace.listNFT(address(nft), tokenId, price);
+		(address sellerAfter,,,) = marketplace.listing(address(nft), tokenId);
+
+		assert(sellerBefore == address(0) && sellerAfter == user);
+
+		vm.stopPrank();
+
+		address user2 = vm.addr(3);
+		vm.startPrank(user2);
+		vm.deal(user2, price);
+
+		(address sellerBefore2,,,) = marketplace.listing(address(nft), tokenId);
+		nft.approve(address(marketplace), tokenId);
+		marketplace.buyNFT{value: price }(address(nft), tokenId);
+		(address sellerAfter2,,,) = marketplace.listing(address(nft), tokenId);
+		assert(sellerBefore2 == user && sellerAfter2 == address(0));
+
+		//Check Balances
+		
+
+		vm.stopPrank();
+	}
+	
 }
